@@ -66,8 +66,12 @@ export default class CompizMagicLampEffectExtension extends Extension {
             return;
         };
 
+        // A window another extension animates itself opts out with
+        // actor._skipMinimizeEffect (one-shot): NexStage flies windows into
+        // and out of its stage strip, where a genie to the dock is wrong.
         this.minimizeId = global.window_manager.connect("minimize", (e, actor) => {
-            if (Main.overview.visible) {
+            if (Main.overview.visible || actor._skipMinimizeEffect) {
+                delete actor._skipMinimizeEffect;
                 Main.wm._shellwm.original_completed_minimize(actor);
                 return;
             }
@@ -82,7 +86,8 @@ export default class CompizMagicLampEffectExtension extends Extension {
         this.unminimizeId = global.window_manager.connect("unminimize", (e, actor) => {
             actor.show();
 
-            if (Main.overview.visible) {
+            if (Main.overview.visible || actor._skipMinimizeEffect) {
+                delete actor._skipMinimizeEffect;
                 Main.wm._shellwm.original_completed_unminimize(actor);
                 return;
             }
