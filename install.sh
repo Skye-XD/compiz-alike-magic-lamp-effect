@@ -3,7 +3,7 @@
 # Compiz-alike Magic Lamp Effect - Installation Script
 # This script installs the extension to your local user directory.
 
-UUID="compiz-alike-magic-lamp-effect@hermes83.github.com"
+UUID="compiz-alike-magic-lamp-effect@skye-xd.github.io"
 INSTALL_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 
 echo "Installing the extension: $UUID"
