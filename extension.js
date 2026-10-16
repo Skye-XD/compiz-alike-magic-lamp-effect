@@ -25,6 +25,7 @@
 'use strict';
 
 import GObject from 'gi://GObject';
+import GLib from 'gi://GLib';
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
@@ -36,6 +37,8 @@ import { SettingsData } from './settings_data.js';
 
 const MINIMIZE_EFFECT_NAME = 'minimize-magic-lamp-effect';
 const UNMINIMIZE_EFFECT_NAME = 'unminimize-magic-lamp-effect';
+// How long an actor._skipMinimizeEffect request stays good (see below).
+const SKIP_EFFECT_US = 1000 * 1000;
 
 export default class CompizMagicLampEffectExtension extends Extension {
 
@@ -67,11 +70,18 @@ export default class CompizMagicLampEffectExtension extends Extension {
         };
 
         // A window another extension animates itself opts out with
-        // actor._skipMinimizeEffect (one-shot): NexStage flies windows into
-        // and out of its stage strip, where a genie to the dock is wrong.
+        // actor._skipMinimizeEffect = GLib.get_monotonic_time(), set just
+        // before its minimize()/unminimize(): NexStage flies windows into and
+        // out of its stage strip, where a genie to the dock is wrong. One-shot,
+        // and only honoured within SKIP_EFFECT_US -- a request nothing
+        // consumed (the window could not minimize, or this extension was off)
+        // must not swallow the genie of some later, ordinary minimize.
         this.minimizeId = global.window_manager.connect("minimize", (e, actor) => {
-            if (Main.overview.visible || actor._skipMinimizeEffect) {
-                delete actor._skipMinimizeEffect;
+            const skip = this.takeSkipRequest(actor);
+            if (Main.overview.visible || skip) {
+                // A genie still running on the actor would keep deforming it
+                // and complete its own (un)minimize after this one.
+                this.destroyActorEffect(actor);
                 Main.wm._shellwm.original_completed_minimize(actor);
                 return;
             }
@@ -86,8 +96,9 @@ export default class CompizMagicLampEffectExtension extends Extension {
         this.unminimizeId = global.window_manager.connect("unminimize", (e, actor) => {
             actor.show();
 
-            if (Main.overview.visible || actor._skipMinimizeEffect) {
-                delete actor._skipMinimizeEffect;
+            const skip = this.takeSkipRequest(actor);
+            if (Main.overview.visible || skip) {
+                this.destroyActorEffect(actor);
                 Main.wm._shellwm.original_completed_unminimize(actor);
                 return;
             }
@@ -167,6 +178,14 @@ export default class CompizMagicLampEffectExtension extends Extension {
         }
 
         return {x: 0, y: 0, width: 0, height: 0};    
+    }
+
+    // Consumes the opt-out whether or not it is still fresh.
+    takeSkipRequest(actor) {
+        const requested = actor._skipMinimizeEffect;
+        delete actor._skipMinimizeEffect;
+        return typeof requested === 'number' &&
+            GLib.get_monotonic_time() - requested < SKIP_EFFECT_US;
     }
 
     destroyActorEffect(actor) {
